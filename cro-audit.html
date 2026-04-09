@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CRO Audit Tool</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;500;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0c0c0f;
+  --surface: #141417;
+  --surface2: #1a1a1f;
+  --border: rgba(255,255,255,0.07);
+  --border-hover: rgba(255,255,255,0.14);
+  --text: #f0f0f0;
+  --text-muted: #aaa;
+  --text-dim: #666;
+  --accent: #c8f135;
+  --accent-dim: rgba(200,241,53,0.12);
+  --accent-glow: rgba(200,241,53,0.25);
+  --ok: #34d399;
+  --ok-bg: rgba(52,211,153,0.1);
+  --ok-border: rgba(52,211,153,0.25);
+  --imp: #fbbf24;
+  --imp-bg: rgba(251,191,36,0.1);
+  --imp-border: rgba(251,191,36,0.25);
+  --crit: #f87171;
+  --crit-bg: rgba(248,113,113,0.1);
+  --crit-border: rgba(248,113,113,0.25);
+  --radius: 10px;
+  --radius-lg: 16px;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+  min-height: 100vh;
+}
+
+/* Layout */
+.app { display: grid; grid-template-columns: 260px 1fr; min-height: 100vh; }
+
+/* Sidebar */
+.sidebar {
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+}
+
+.sidebar::-webkit-scrollbar { width: 4px; }
+.sidebar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+.sidebar-logo {
+  padding: 24px 20px 20px;
+  border-bottom: 1px solid var(--border);
+}
+.sidebar-logo .tool-name {
+  font-family: 'Syne', sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text);
+  margin-top: 2px;
+}
+.sidebar-logo .tool-name span { color: var(--accent); }
+
+.sidebar-stats {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.mini-stat { background: var(--surface2); border-radius: var(--radius); padding: 10px 12px; }
+.mini-stat .label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: #888; margin-bottom: 4px; }
+.mini-stat .val { font-family: 'DM Mono', monospace; font-size: 20px; font-weight: 500; }
+.mini-stat.ok .val { color: var(--ok); }
+.mini-stat.imp .val { color: var(--imp); }
+.mini-stat.crit .val { color: var(--crit); }
+.mini-stat.total .val { color: var(--accent); }
+
+.sidebar-progress {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+}
+.progress-label { display: flex; justify-content: space-between; font-size: 11px; color: #888; margin-bottom: 8px; }
+.progress-track { height: 3px; background: var(--surface2); border-radius: 99px; overflow: hidden; }
+.progress-fill { height: 100%; background: var(--accent); border-radius: 99px; transition: width 0.4s cubic-bezier(0.4,0,0.2,1); width: 0%; }
+
+.sidebar-nav { padding: 12px 0; flex: 1; }
+.nav-section {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 20px;
+  cursor: pointer;
+  transition: background 0.15s;
+  border-left: 2px solid transparent;
+  text-decoration: none;
+}
+.nav-section:hover { background: var(--surface2); }
+.nav-section.active { border-left-color: var(--accent); background: var(--accent-dim); }
+.nav-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--surface2); border: 1.5px solid var(--text-dim); flex-shrink: 0; transition: all 0.2s; }
+.nav-section.done .nav-dot { background: var(--ok); border-color: var(--ok); }
+.nav-section.partial .nav-dot { background: var(--imp); border-color: var(--imp); }
+.nav-title { font-size: 12px; color: #bbb; flex: 1; transition: color 0.15s; }
+.nav-section:hover .nav-title, .nav-section.active .nav-title { color: var(--text); }
+.nav-count { font-family: 'DM Mono', monospace; font-size: 10px; color: #777; }
+
+.sidebar-actions { padding: 16px 20px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; }
+.btn {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 10px 16px; border-radius: var(--radius); border: 1px solid rgba(255,255,255,0.15);
+  background: transparent; color: #bbb; font-family: 'DM Sans', sans-serif;
+  font-size: 12px; cursor: pointer; transition: all 0.2s; width: 100%;
+}
+.btn:hover { border-color: rgba(255,255,255,0.25); color: var(--text); background: var(--surface2); }
+.btn-primary {
+  background: var(--accent); color: #0c0c0f; border-color: var(--accent);
+  font-weight: 500; font-family: 'Syne', sans-serif; font-size: 12px; letter-spacing: 0.04em;
+}
+.btn-primary:hover { background: #d4f54a; border-color: #d4f54a; color: #0c0c0f; }
+.btn svg { width: 14px; height: 14px; flex-shrink: 0; }
+
+/* Main */
+.main { min-width: 0; }
+
+/* Top bar */
+.topbar {
+  position: sticky; top: 0; z-index: 10;
+  background: rgba(12,12,15,0.92); backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  padding: 14px 32px;
+  display: flex; align-items: center; gap: 16px;
+}
+.client-fields { display: flex; gap: 12px; flex: 1; }
+.field-wrap { flex: 1; position: relative; }
+.field-wrap label { position: absolute; top: -8px; left: 10px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--accent); background: var(--bg); padding: 0 4px; }
+.field-wrap input {
+  width: 100%; background: var(--surface); border: 1px solid rgba(255,255,255,0.12);
+  border-radius: var(--radius); padding: 8px 12px; color: var(--text);
+  font-family: 'DM Sans', sans-serif; font-size: 13px;
+  transition: border-color 0.2s;
+}
+.field-wrap input:focus { outline: none; border-color: rgba(200,241,53,0.4); }
+.field-wrap input::placeholder { color: #666; }
+
+/* Content area */
+.content { padding: 32px; }
+
+/* Section */
+.audit-section {
+  margin-bottom: 24px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  transition: border-color 0.2s;
+}
+.audit-section:hover { border-color: var(--border-hover); }
+
+.section-header {
+  display: flex; align-items: center; gap: 16px;
+  padding: 16px 20px;
+  cursor: pointer;
+  user-select: none;
+  background: var(--surface);
+  transition: background 0.2s;
+}
+.section-header:hover { background: var(--surface2); }
+.section-num {
+  font-family: 'DM Mono', monospace; font-size: 11px;
+  color: var(--accent); background: var(--accent-dim);
+  border: 1px solid var(--accent-glow);
+  padding: 3px 8px; border-radius: 6px; flex-shrink: 0;
+}
+.section-title { font-family: 'Syne', sans-serif; font-size: 15px; font-weight: 600; flex: 1; color: #eee; }
+.section-pills { display: flex; gap: 6px; }
+.pill {
+  font-family: 'DM Mono', monospace; font-size: 10px; padding: 2px 7px;
+  border-radius: 20px; border: 1px solid transparent;
+}
+.pill.ok { background: var(--ok-bg); border-color: var(--ok-border); color: var(--ok); }
+.pill.imp { background: var(--imp-bg); border-color: var(--imp-border); color: var(--imp); }
+.pill.crit { background: var(--crit-bg); border-color: var(--crit-border); color: var(--crit); }
+.pill.neutral { background: var(--surface2); color: var(--text-dim); }
+.section-chevron { color: #777; font-size: 10px; transition: transform 0.25s; flex-shrink: 0; }
+.section-header.open .section-chevron { transform: rotate(180deg); }
+
+.checkpoints-wrap { display: none; }
+.checkpoints-wrap.open { display: block; }
+
+/* Checkpoint row */
+.cp-row {
+  display: grid;
+  grid-template-columns: 52px 1fr;
+  border-top: 1px solid var(--border);
+  transition: background 0.15s;
+}
+.cp-row:hover { background: rgba(255,255,255,0.015); }
+.cp-row.scored-ok { border-left: 2px solid var(--ok); }
+.cp-row.scored-imp { border-left: 2px solid var(--imp); }
+.cp-row.scored-crit { border-left: 2px solid var(--crit); }
+
+.cp-num-col {
+  display: flex; align-items: flex-start; justify-content: center;
+  padding: 16px 0 16px;
+}
+.cp-num-badge {
+  font-family: 'DM Mono', monospace; font-size: 10px; color: #888;
+  writing-mode: vertical-rl; text-orientation: mixed;
+  transform: rotate(180deg); letter-spacing: 0.04em;
+}
+
+.cp-body { padding: 16px 20px 16px 0; display: flex; flex-direction: column; gap: 10px; }
+.cp-label { font-size: 13px; font-weight: 500; color: #eee; }
+.cp-desc { font-size: 12px; color: #999; line-height: 1.6; }
+.cp-bottom { display: flex; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+
+.score-group { display: flex; gap: 6px; flex-shrink: 0; }
+.score-btn {
+  font-size: 11px; padding: 5px 11px; border-radius: 20px;
+  border: 1px solid rgba(255,255,255,0.15); background: rgba(255,255,255,0.04);
+  color: #ccc; cursor: pointer;
+  font-family: 'DM Sans', sans-serif; transition: all 0.15s;
+  white-space: nowrap;
+}
+.score-btn:hover { border-color: rgba(255,255,255,0.3); color: #fff; background: rgba(255,255,255,0.08); }
+.score-btn.active-ok { background: var(--ok-bg); border-color: var(--ok-border); color: var(--ok); }
+.score-btn.active-imp { background: var(--imp-bg); border-color: var(--imp-border); color: var(--imp); }
+.score-btn.active-crit { background: var(--crit-bg); border-color: var(--crit-border); color: var(--crit); }
+
+.cp-notes {
+  flex: 1; min-width: 200px; background: var(--surface2);
+  border: 1px solid var(--border); border-radius: 8px;
+  padding: 6px 10px; color: var(--text); font-size: 12px;
+  font-family: 'DM Sans', sans-serif; resize: none;
+  transition: border-color 0.2s; line-height: 1.5;
+  min-height: 32px; overflow: hidden;
+}
+.cp-notes:focus { outline: none; border-color: rgba(200,241,53,0.3); }
+.cp-notes::placeholder { color: var(--text-dim); }
+
+/* Export panel */
+.export-panel {
+  display: none; position: fixed; inset: 0; z-index: 100;
+  background: rgba(0,0,0,0.7); backdrop-filter: blur(8px);
+  align-items: center; justify-content: center; padding: 24px;
+}
+.export-panel.open { display: flex; }
+.export-box {
+  background: var(--surface); border: 1px solid var(--border-hover);
+  border-radius: var(--radius-lg); padding: 32px; max-width: 600px; width: 100%;
+  max-height: 80vh; overflow-y: auto;
+}
+.export-box h2 { font-family: 'Syne', sans-serif; font-size: 18px; font-weight: 700; margin-bottom: 16px; }
+.export-content { font-family: 'DM Mono', monospace; font-size: 11px; line-height: 1.8; color: var(--text-muted); white-space: pre-wrap; word-break: break-word; }
+.export-close { float: right; font-size: 11px; cursor: pointer; color: var(--text-muted); border: 1px solid var(--border); padding: 4px 10px; border-radius: 6px; background: transparent; font-family: 'DM Sans', sans-serif; }
+.export-close:hover { color: var(--text); border-color: var(--border-hover); }
+.export-actions { display: flex; gap: 10px; margin-top: 20px; }
+.export-actions .btn { flex: 1; }
+
+/* Animations */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.audit-section {
+  animation: fadeInUp 0.3s ease both;
+}
+.audit-section:nth-child(1) { animation-delay: 0.03s; }
+.audit-section:nth-child(2) { animation-delay: 0.06s; }
+.audit-section:nth-child(3) { animation-delay: 0.09s; }
+.audit-section:nth-child(4) { animation-delay: 0.12s; }
+.audit-section:nth-child(5) { animation-delay: 0.15s; }
+.audit-section:nth-child(6) { animation-delay: 0.18s; }
+.audit-section:nth-child(7) { animation-delay: 0.21s; }
+.audit-section:nth-child(8) { animation-delay: 0.24s; }
+.audit-section:nth-child(9) { animation-delay: 0.27s; }
+.audit-section:nth-child(10) { animation-delay: 0.30s; }
+
+/* Score flare animation */
+@keyframes flare {
+  0% { box-shadow: 0 0 0 0 rgba(200,241,53,0.4); }
+  100% { box-shadow: 0 0 0 8px rgba(200,241,53,0); }
+}
+.score-btn.just-scored { animation: flare 0.4s ease-out; }
+
+/* Toast */
+.toast {
+  position: fixed; bottom: 24px; right: 24px; z-index: 200;
+  background: var(--surface2); border: 1px solid var(--border-hover);
+  border-radius: var(--radius); padding: 12px 18px;
+  font-size: 13px; color: var(--text);
+  transform: translateY(80px); opacity: 0;
+  transition: all 0.3s cubic-bezier(0.34,1.56,0.64,1);
+  pointer-events: none;
+}
+.toast.show { transform: translateY(0); opacity: 1; }
+.toast .t-icon { display: inline-block; margin-right: 8px; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+/* Print / export styles */
+@media print {
+  .sidebar, .topbar, .score-group, .cp-notes, .section-chevron { display: none !important; }
+  .app { grid-template-columns: 1fr; }
+  .cp-row { break-inside: avoid; }
+}
+</style>
+</head>
+<body>
+
+<div class="app">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="tool-name">CRO <span>Audit</span></div>
+    </div>
+
+    <div class="sidebar-stats">
+      <div class="mini-stat total"><div class="label">Beoordeeld</div><div class="val" id="s-total">0</div></div>
+      <div class="mini-stat ok"><div class="label">Geen actie</div><div class="val" id="s-ok">0</div></div>
+      <div class="mini-stat imp"><div class="label">Verbeterkans</div><div class="val" id="s-imp">0</div></div>
+      <div class="mini-stat crit"><div class="label">Noodzakelijk</div><div class="val" id="s-crit">0</div></div>
+    </div>
+
+    <div class="sidebar-progress">
+      <div class="progress-label"><span>Voortgang</span><span id="s-pct">0 / 50</span></div>
+      <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
+    </div>
+
+    <nav class="sidebar-nav" id="sidebar-nav"></nav>
+
+    <div class="sidebar-actions">
+      <button class="btn" onclick="expandAll()">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/></svg>
+        Alles uitklappen
+      </button>
+      <button class="btn" onclick="exportText()">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+        Exporteer tekst
+      </button>
+      <button class="btn btn-primary" onclick="exportHTML()">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+        Download rapport
+      </button>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main class="main">
+    <div class="topbar">
+      <div class="client-fields">
+        <div class="field-wrap">
+          <label>Klant</label>
+          <input id="f-client" placeholder="bijv. Office Centre" />
+        </div>
+        <div class="field-wrap">
+          <label>URL</label>
+          <input id="f-url" placeholder="bijv. officecentre.nl" />
+        </div>
+        <div class="field-wrap" style="max-width:160px">
+          <label>Datum</label>
+          <input id="f-date" type="date" />
+        </div>
+        <div class="field-wrap" style="max-width:160px">
+          <label>Auteur</label>
+          <input id="f-author" placeholder="bijv. Max van Gurp" />
+        </div>
+      </div>
+    </div>
+
+    <div class="content" id="content"></div>
+  </main>
+</div>
+
+<!-- Export panel -->
+<div class="export-panel" id="export-panel">
+  <div class="export-box">
+    <button class="export-close" onclick="closeExport()">sluiten ✕</button>
+    <h2 id="export-title">Exporteren</h2>
+    <div class="export-content" id="export-content"></div>
+    <div class="export-actions">
+      <button class="btn" onclick="copyExport()">Kopiëren</button>
+      <button class="btn btn-primary" onclick="downloadExport()">Downloaden</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"><span class="t-icon">✓</span><span id="toast-msg">Opgeslagen</span></div>
+
+<script>
+const SECTIONS = [
+  { id:"homepage", num:"01", title:"Homepage", checkpoints:[
+    { nr:"1.1", label:"Titel homepage", desc:"De titel op je homepage moet voor bezoekers in één oogopslag duidelijk maken waar je website over gaat en wat je aanbiedt." },
+    { nr:"1.2", label:"Unique selling points (USP's)", desc:"De homepage moet bezoekers in één oogopslag duidelijk maken waarom ze bij jou moeten kopen. Je USP's moeten duidelijk in beeld staan." },
+    { nr:"1.3", label:"CTA homepage", desc:"Geef je bezoekers op je homepage gelijk een actie door één duidelijke call to action (CTA) te tonen." },
+    { nr:"1.4", label:"Bedrijfslogo", desc:"Zorg ervoor dat je bedrijfslogo op een logische plek geplaatst is en naar de homepage leidt wanneer bezoekers erop klikken." },
+    { nr:"1.5", label:"Clean design homepage", desc:"Een clean design zorgt voor een overzichtelijke homepage, zonder dat mensen worden afgeleid door andere elementen." },
+    { nr:"1.6", label:"Scrollen homepage", desc:"Het moet voor bezoekers op desktop en mobiel duidelijk zijn dat er onder de vouw ook nog informatie staat." },
+    { nr:"1.7", label:"Tekst op foto's", desc:"Voorkom onleesbare tekst op foto's." },
+    { nr:"1.8", label:"Functionaliteit", desc:"Om te voorkomen dat bezoekers afhaken, moet je zorgen dat de functionaliteiten op je webshop goed werken." }
+  ]},
+  { id:"menu", num:"02", title:"Menu", checkpoints:[
+    { nr:"2.1", label:"Aantal menu items", desc:"Een goed menu heeft maximaal 7 menu items met sub menu items." },
+    { nr:"2.2", label:"Plaatsing menu items", desc:"Websitebezoekers hebben bepaalde verwachtingen van welke informatie ze waar kunnen vinden. Een logische menu volgorde en plaatsing is belangrijk." },
+    { nr:"2.3", label:"Benaming menu items", desc:"Houd de benaming van je menu items simpel en begrijpelijk. Gebruik geen vaktermen." },
+    { nr:"2.4", label:"Menu diepte", desc:"Zorg ervoor dat het menu niet dieper is dan 3 niveaus, omdat de structuur anders te complex wordt." },
+    { nr:"2.5", label:"Sticky menu", desc:"Een sticky menu zorgt ervoor dat deze altijd toegankelijk is voor bezoekers, ook als zij verder naar beneden zijn gescrold." },
+    { nr:"2.6", label:"Transactioneel vs. content menu", desc:"Een duidelijk onderscheid tussen je transactionele menu en je content menu (FAQ, blog, contact etc.) zorgt voor betere vindbaarheid." },
+    { nr:"2.7", label:"Hoofd- en submenu klikbaar", desc:"Wanneer zowel de hoofd- als de sub menu items klikbaar zijn in het menu, kunnen gebruikers gemakkelijker door de website navigeren." },
+    { nr:"2.8", label:"Grootte menu", desc:"Een menu is het meest gebruiksvriendelijk wanneer bezoekers er niet doorheen hoeven te scrollen wanneer ze deze gebruiken." }
+  ]},
+  { id:"zoeken", num:"03", title:"Zoeken", checkpoints:[
+    { nr:"3.1", label:"Plaatsing zoekbalk", desc:"Zorg dat de zoekbalk op een prominente plek staat, zodat hij opvalt voor bezoekers." },
+    { nr:"3.2", label:"Autocomplete zoekbalk", desc:"Een zoekbalk met autocomplete zorgt ervoor dat bezoekers sneller bij hun zoekresultaten uitkomen." },
+    { nr:"3.3", label:"Zoekresultaten", desc:"Zorg voor relevante zoekresultaten die aansluiten op wat de bezoeker zoekt." },
+    { nr:"3.4", label:"Geen resultaten pagina", desc:"Zorg dat er bij geen zoekresultaten een helpende pagina wordt getoond met alternatieve opties." }
+  ]},
+  { id:"overzicht", num:"04", title:"Overzichtspagina's & filtering", checkpoints:[
+    { nr:"4.1", label:"Aantal producten in overzicht", desc:"Toon voldoende producten per overzichtspagina zodat bezoekers goed kunnen vergelijken." },
+    { nr:"4.2", label:"Productafbeeldingen in overzicht", desc:"Zorg voor duidelijke, hoge kwaliteit productafbeeldingen in het overzicht." },
+    { nr:"4.3", label:"Prijs zichtbaar in overzicht", desc:"De prijs moet duidelijk zichtbaar zijn in het productoverzicht." },
+    { nr:"4.4", label:"Filteropties", desc:"Zorg voor relevante filteropties waarmee bezoekers snel kunnen filteren op de gewenste kenmerken." },
+    { nr:"4.5", label:"Sorteermogelijkheden", desc:"Bied sorteermogelijkheden aan zoals prijs, populariteit en nieuwste producten." },
+    { nr:"4.6", label:"Breadcrumbs", desc:"Breadcrumbs helpen bezoekers te begrijpen waar ze zich op de website bevinden en hoe ze terug kunnen navigeren." }
+  ]},
+  { id:"pdp", num:"05", title:"Product detail pagina", checkpoints:[
+    { nr:"5.1", label:"Productafbeeldingen PDP", desc:"Zorg voor meerdere hoge kwaliteit productafbeeldingen vanuit verschillende hoeken." },
+    { nr:"5.2", label:"Producttitel en beschrijving", desc:"De producttitel en beschrijving moeten duidelijk en volledig zijn." },
+    { nr:"5.3", label:"Prijs zichtbaar PDP", desc:"De prijs moet duidelijk en prominent zichtbaar zijn op de productpagina." },
+    { nr:"5.4", label:"Add-to-cart button", desc:"De 'toevoegen aan winkelwagen' button moet prominent aanwezig zijn en opvallen op de pagina." },
+    { nr:"5.5", label:"Klantreviews", desc:"Klantreviews zorgen voor social proof en helpen bezoekers bij het maken van een aankoopbeslissing." },
+    { nr:"5.6", label:"Gerelateerde producten", desc:"Toon gerelateerde producten om de gemiddelde orderwaarde te verhogen en bezoekers langer op de site te houden." }
+  ]},
+  { id:"checkout", num:"06", title:"Checkout", checkpoints:[
+    { nr:"6.1", label:"Navigatie naar winkelwagen", desc:"Het moet eenvoudig zijn om naar de winkelwagen te navigeren. Eén mogelijkheid moet altijd primair zijn." },
+    { nr:"6.2", label:"Aantal benodigde gegevens", desc:"Hoe meer invulvelden, hoe kleiner de kans dat mensen hun aankoop afronden. Verwijder onnodige velden of verdeel over meerdere pagina's (chunking)." },
+    { nr:"6.3", label:"Kortingscodes", desc:"Kortingscodes moeten op een logische plek ingevuld worden, zodat bezoekers hier niet naar hoeven zoeken." },
+    { nr:"6.4", label:"Uiterlijk invulvelden", desc:"Voorkom enkel placeholder teksten in labels. Gebruik floating labels. Zorg dat verplichte velden duidelijk zijn." },
+    { nr:"6.5", label:"Totaalprijs zichtbaar", desc:"Zorg dat de checkout zo vroeg mogelijk laat zien hoeveel producten er in zitten, wat de totaalprijs is en welke andere kosten erbij komen." },
+    { nr:"6.6", label:"Wijzigingen winkelwagen", desc:"Wijzigingen in de winkelwagen moeten makkelijk doorgevoerd kunnen worden, zoals verwijderen of aantallen aanpassen." },
+    { nr:"6.7", label:"Menu in checkout", desc:"Adviseer altijd het menu uit de checkout te halen om zo min mogelijk afleiding te creëren." },
+    { nr:"6.8", label:"Afrekenen als gast", desc:"Bied altijd de mogelijkheid om af te rekenen als gast om te voorkomen dat bezoekers afhaken." },
+    { nr:"6.9", label:"Product afbeeldingen in checkout", desc:"Afbeeldingen van de producten in de checkout zorgen ervoor dat bezoekers niet meer terug hoeven te navigeren." }
+  ]},
+  { id:"usps", num:"07", title:"Unique selling points", checkpoints:[
+    { nr:"7.1", label:"Aantal USP's", desc:"Mensen kunnen maximaal 3 USP's onthouden. Gebruik er dus niet te veel." },
+    { nr:"7.2", label:"Plaatsing USP's", desc:"Plaats USP's boven de vouw, bij voorkeur bovenaan het scherm in een aparte balk. Ook op mobiel moeten ze duidelijk getoond worden." },
+    { nr:"7.3", label:"Concrete USP's", desc:"Zorg voor concrete USP's, zoals 'bezorging binnen 24 uur' in plaats van 'snelle bezorging'." }
+  ]},
+  { id:"ctas", num:"08", title:"Call-to-actions", checkpoints:[
+    { nr:"8.1", label:"Consistentie CTA buttons", desc:"Zorg voor consistente buttons zodat bezoekers deze kunnen herkennen. Buttons moeten op mobiel groot genoeg zijn voor je duim." },
+    { nr:"8.2", label:"Herkenbaarheid klikbare elementen", desc:"Zorg dat CTA buttons en andere klikbare elementen herkenbaar zijn door te werken met buttons, hover effecten of onderstreepte teksten." },
+    { nr:"8.3", label:"Kleur CTA buttons", desc:"Zorg dat het contrast tussen je huisstijl en de kleur van buttons groot genoeg is." },
+    { nr:"8.4", label:"Aantal CTA's per pagina", desc:"Zorg ervoor dat elke pagina 1 primaire CTA heeft. Met meerdere CTA's moet er één uitspringen." },
+    { nr:"8.5", label:"Vervolgstappen duidelijk", desc:"Het moet voor bezoekers duidelijk en concreet zijn wat ze na een klik op een CTA button krijgen." }
+  ]},
+  { id:"nav", num:"09", title:"Navigatie & informatie", checkpoints:[
+    { nr:"9.1", label:"Herkenbare icoontjes", desc:"Icoontjes op een webshop moeten herkenbaar zijn. Gebruik er niet te veel omdat het anders snel rommelig kan worden." },
+    { nr:"9.2", label:"Contactgegevens", desc:"Bezoekers moeten contactgegevens snel en gemakkelijk kunnen vinden. Zorg voor een contactpagina en contactgegevens in de footer." },
+    { nr:"9.3", label:"Retourbeleid zichtbaar", desc:"Zorg dat informatie over het retourbeleid gemakkelijk te vinden is." },
+    { nr:"9.4", label:"Verzendkosten zichtbaar", desc:"Zorg dat informatie over verzendkosten gemakkelijk te vinden is." },
+    { nr:"9.5", label:"Levertijd zichtbaar", desc:"Zorg dat informatie over levertijd gemakkelijk te vinden is." },
+    { nr:"9.6", label:"Klikbare contactgegevens", desc:"Zorg dat een mailadres of icoontje altijd klikbaar is op desktop en mobiel. Maak op mobiel het telefoonnummer klikbaar." }
+  ]},
+  { id:"ux", num:"10", title:"Algehele gebruikerservaring", checkpoints:[
+    { nr:"10.1", label:"Vindbaarheid producten", desc:"Het is belangrijk dat bezoekers snel de producten vinden waar ze naar op zoek zijn." },
+    { nr:"10.2", label:"Gebruiksvriendelijke flow", desc:"De flow van het binnenkomen op de website, tot het afrekenen van een bestelling moet zo moeiteloos mogelijk gaan." },
+    { nr:"10.3", label:"Actie in funnel duidelijk", desc:"Is het gedurende de hele funnel duidelijk voor bezoekers welke actie van ze verwacht wordt?" },
+    { nr:"10.4", label:"Cookie compliance", desc:"Het is belangrijk om te voldoen aan de laatste wet- en regelgeving omtrent cookies." }
+  ]}
+];
+
+const scores = {};
+const notes = {};
+const TOTAL = SECTIONS.reduce((a,s) => a+s.checkpoints.length, 0);
+
+// Set default date
+document.getElementById('f-date').value = new Date().toISOString().split('T')[0];
+
+function buildUI() {
+  const content = document.getElementById('content');
+  const nav = document.getElementById('sidebar-nav');
+  content.innerHTML = '';
+  nav.innerHTML = '';
+
+  SECTIONS.forEach(section => {
+    // Sidebar nav
+    const a = document.createElement('a');
+    a.href = '#sec-' + section.id;
+    a.className = 'nav-section';
+    a.id = 'nav-' + section.id;
+    a.innerHTML = `<span class="nav-dot"></span><span class="nav-title">${section.num} ${section.title}</span><span class="nav-count" id="nav-cnt-${section.id}">0/${section.checkpoints.length}</span>`;
+    nav.appendChild(a);
+
+    // Section
+    const div = document.createElement('div');
+    div.className = 'audit-section';
+    div.id = 'sec-' + section.id;
+    div.innerHTML = `
+      <div class="section-header" id="sh-${section.id}" onclick="toggleSection('${section.id}')">
+        <span class="section-num">${section.num}</span>
+        <span class="section-title">${section.title}</span>
+        <div class="section-pills" id="pills-${section.id}"></div>
+        <span class="section-chevron">▼</span>
+      </div>
+      <div class="checkpoints-wrap" id="cw-${section.id}">
+        ${section.checkpoints.map(cp => buildCpHTML(cp)).join('')}
+      </div>`;
+    content.appendChild(div);
+  });
+}
+
+function buildCpHTML(cp) {
+  const s = scores[cp.nr] || '';
+  const n = notes[cp.nr] || '';
+  return `<div class="cp-row ${s ? 'scored-'+s : ''}" id="cpr-${cp.nr.replace('.','_')}">
+    <div class="cp-num-col"><span class="cp-num-badge">${cp.nr}</span></div>
+    <div class="cp-body">
+      <div class="cp-label">${cp.label}</div>
+      <div class="cp-desc">${cp.desc}</div>
+      <div class="cp-bottom">
+        <div class="score-group">
+          <button class="score-btn ${s==='ok'?'active-ok':''}" onclick="setScore('${cp.nr}','ok',this)">✓ Geen actie</button>
+          <button class="score-btn ${s==='imp'?'active-imp':''}" onclick="setScore('${cp.nr}','imp',this)">◐ Verbeterkans</button>
+          <button class="score-btn ${s==='crit'?'active-crit':''}" onclick="setScore('${cp.nr}','crit',this)">⚑ Noodzakelijk</button>
+        </div>
+        <textarea class="cp-notes" id="nt-${cp.nr.replace('.','_')}" placeholder="Notities / bevindingen…" rows="1" oninput="saveNote('${cp.nr}',this)">${n}</textarea>
+      </div>
+    </div>
+  </div>`;
+}
+
+function setScore(nr, val, btn) {
+  if (scores[nr] === val) { delete scores[nr]; }
+  else { scores[nr] = val; }
+
+  const key = nr.replace('.','_');
+  const row = document.getElementById('cpr-' + key);
+  row.className = 'cp-row' + (scores[nr] ? ' scored-'+scores[nr] : '');
+
+  // Update buttons in row
+  row.querySelectorAll('.score-btn').forEach(b => {
+    b.classList.remove('active-ok','active-imp','active-crit');
+  });
+  if (scores[nr]) {
+    btn.classList.remove('active-ok','active-imp','active-crit');
+    btn.classList.add('active-'+scores[nr]);
+    btn.classList.add('just-scored');
+    setTimeout(() => btn.classList.remove('just-scored'), 400);
+  }
+
+  updateAll();
+  showToast(scores[nr] ? 'Score opgeslagen' : 'Score verwijderd');
+}
+
+function saveNote(nr, el) {
+  notes[nr] = el.value;
+  el.style.height = 'auto';
+  el.style.height = el.scrollHeight + 'px';
+}
+
+function updateAll() {
+  const allVals = Object.values(scores);
+  const total = allVals.length;
+  const ok = allVals.filter(v=>v==='ok').length;
+  const imp = allVals.filter(v=>v==='imp').length;
+  const crit = allVals.filter(v=>v==='crit').length;
+
+  document.getElementById('s-total').textContent = total;
+  document.getElementById('s-ok').textContent = ok;
+  document.getElementById('s-imp').textContent = imp;
+  document.getElementById('s-crit').textContent = crit;
+  document.getElementById('s-pct').textContent = total + ' / ' + TOTAL;
+  document.getElementById('progress-fill').style.width = Math.round((total/TOTAL)*100) + '%';
+
+  SECTIONS.forEach(section => {
+    const vals = section.checkpoints.map(cp => scores[cp.nr]).filter(Boolean);
+    const cnt = vals.length;
+    const sok = vals.filter(v=>v==='ok').length;
+    const simp = vals.filter(v=>v==='imp').length;
+    const scrit = vals.filter(v=>v==='crit').length;
+
+    // Nav count
+    document.getElementById('nav-cnt-'+section.id).textContent = cnt+'/'+section.checkpoints.length;
+    const navEl = document.getElementById('nav-'+section.id);
+    navEl.classList.remove('done','partial');
+    if (cnt === section.checkpoints.length) navEl.classList.add('done');
+    else if (cnt > 0) navEl.classList.add('partial');
+
+    // Pills
+    const pills = document.getElementById('pills-'+section.id);
+    pills.innerHTML = '';
+    if (sok) pills.innerHTML += `<span class="pill ok">${sok} ok</span>`;
+    if (simp) pills.innerHTML += `<span class="pill imp">${simp} imp</span>`;
+    if (scrit) pills.innerHTML += `<span class="pill crit">${scrit} crit</span>`;
+    if (!cnt) pills.innerHTML = `<span class="pill neutral">${section.checkpoints.length} items</span>`;
+  });
+}
+
+function toggleSection(id) {
+  const cw = document.getElementById('cw-'+id);
+  const sh = document.getElementById('sh-'+id);
+  const isOpen = cw.classList.contains('open');
+  cw.classList.toggle('open', !isOpen);
+  sh.classList.toggle('open', !isOpen);
+}
+
+function expandAll() {
+  SECTIONS.forEach(s => {
+    document.getElementById('cw-'+s.id).classList.add('open');
+    document.getElementById('sh-'+s.id).classList.add('open');
+  });
+}
+
+function buildReportText() {
+  const client = document.getElementById('f-client').value || '—';
+  const url = document.getElementById('f-url').value || '—';
+  const date = document.getElementById('f-date').value || '—';
+  const author = document.getElementById('f-author').value || '—';
+  const allVals = Object.values(scores);
+  const ok = allVals.filter(v=>v==='ok').length;
+  const imp = allVals.filter(v=>v==='imp').length;
+  const crit = allVals.filter(v=>v==='crit').length;
+
+  let txt = `CRO AUDIT RAPPORT\n${'='.repeat(50)}\n`;
+  txt += `Klant:   ${client}\nURL:     ${url}\nDatum:   ${date}\nAuteur:  ${author}\n\n`;
+  txt += `SAMENVATTING\n${'-'.repeat(30)}\n`;
+  txt += `Beoordeeld: ${allVals.length} / ${TOTAL}\n`;
+  txt += `Geen actie vereist: ${ok}\nVerbeterkansen: ${imp}\nNoodzakelijke actiepunten: ${crit}\n\n`;
+
+  SECTIONS.forEach(section => {
+    const hasScores = section.checkpoints.some(cp => scores[cp.nr]);
+    if (!hasScores) return;
+    txt += `\n${section.num}. ${section.title.toUpperCase()}\n${'-'.repeat(30)}\n`;
+    section.checkpoints.forEach(cp => {
+      const s = scores[cp.nr];
+      if (!s) return;
+      const label = s === 'ok' ? '✓ Geen actie' : s === 'imp' ? '◐ Verbeterkans' : '⚑ Noodzakelijk';
+      txt += `  [${label}] ${cp.nr} ${cp.label}\n`;
+      if (notes[cp.nr]) txt += `    → ${notes[cp.nr]}\n`;
+    });
+  });
+
+  if (crit > 0 || imp > 0) {
+    txt += `\nACTIELIJST\n${'-'.repeat(30)}\n`;
+    if (crit > 0) {
+      txt += `\nNoodzakelijke actiepunten:\n`;
+      SECTIONS.forEach(s => s.checkpoints.filter(cp => scores[cp.nr]==='crit').forEach(cp => {
+        txt += `  ⚑ ${cp.nr} ${cp.label}\n`;
+        if (notes[cp.nr]) txt += `     ${notes[cp.nr]}\n`;
+      }));
+    }
+    if (imp > 0) {
+      txt += `\nVerbeterkansen:\n`;
+      SECTIONS.forEach(s => s.checkpoints.filter(cp => scores[cp.nr]==='imp').forEach(cp => {
+        txt += `  ◐ ${cp.nr} ${cp.label}\n`;
+        if (notes[cp.nr]) txt += `     ${notes[cp.nr]}\n`;
+      }));
+    }
+  }
+  return txt;
+}
+
+function exportText() {
+  const txt = buildReportText();
+  document.getElementById('export-title').textContent = 'Audit rapport — tekst';
+  document.getElementById('export-content').textContent = txt;
+  document.getElementById('export-panel').classList.add('open');
+  window._exportTxt = txt;
+  window._exportType = 'txt';
+}
+
+function exportHTML() {
+  const client = document.getElementById('f-client').value || 'CRO Audit';
+  const url = document.getElementById('f-url').value || '';
+  const date = document.getElementById('f-date').value || '';
+  const author = document.getElementById('f-author').value || '';
+  const allVals = Object.values(scores);
+  const ok = allVals.filter(v=>v==='ok').length;
+  const imp = allVals.filter(v=>v==='imp').length;
+  const crit = allVals.filter(v=>v==='crit').length;
+
+  let rows = '';
+  SECTIONS.forEach(section => {
+    const hasScores = section.checkpoints.some(cp => scores[cp.nr]);
+    rows += `<tr class="sec-row"><td colspan="3"><strong>${section.num}. ${section.title}</strong></td></tr>`;
+    section.checkpoints.forEach(cp => {
+      const s = scores[cp.nr] || '';
+      const label = s === 'ok' ? 'Geen actie' : s === 'imp' ? 'Verbeterkans' : s === 'crit' ? 'Noodzakelijk' : '—';
+      const cls = s === 'ok' ? 'color:#16a34a' : s === 'imp' ? 'color:#d97706' : s === 'crit' ? 'color:#dc2626' : 'color:#aaa';
+      rows += `<tr>
+        <td style="color:#666;width:50px">${cp.nr}</td>
+        <td>${cp.label}${notes[cp.nr] ? `<br><span style="font-size:11px;color:#888">${notes[cp.nr]}</span>` : ''}</td>
+        <td style="${cls};white-space:nowrap;font-weight:500">${label}</td>
+      </tr>`;
+    });
+  });
+
+  const html = `<!DOCTYPE html><html lang="nl"><head><meta charset="UTF-8"><title>CRO Audit — ${client}</title>
+<style>
+body{font-family:system-ui,sans-serif;color:#111;max-width:900px;margin:40px auto;padding:0 24px;line-height:1.6}
+h1{font-size:28px;font-weight:700;margin-bottom:4px}
+.meta{color:#666;font-size:13px;margin-bottom:32px}
+.summary{display:flex;gap:16px;margin-bottom:32px;flex-wrap:wrap}
+.s-card{padding:16px 20px;border-radius:10px;border:1px solid #e5e7eb;min-width:120px}
+.s-card .n{font-size:28px;font-weight:700}.s-card .l{font-size:12px;color:#666;text-transform:uppercase;letter-spacing:.05em}
+.ok-card{border-color:#bbf7d0}.ok-card .n{color:#16a34a}
+.imp-card{border-color:#fde68a}.imp-card .n{color:#d97706}
+.crit-card{border-color:#fecaca}.crit-card .n{color:#dc2626}
+table{width:100%;border-collapse:collapse;font-size:13px}
+td{padding:8px 12px;border-bottom:1px solid #f0f0f0;vertical-align:top}
+tr.sec-row td{background:#f9fafb;font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:#444;padding:12px 12px 8px;border-bottom:2px solid #e5e7eb;margin-top:16px}
+@media print{.s-card{break-inside:avoid}tr{break-inside:avoid}}
+</style></head><body>
+<h1>CRO Audit — ${client}</h1>
+<div class="meta">${url ? url + ' · ' : ''}${date} · ${author}</div>
+<div class="summary">
+  <div class="s-card"><div class="n">${allVals.length}</div><div class="l">Beoordeeld</div></div>
+  <div class="s-card ok-card"><div class="n">${ok}</div><div class="l">Geen actie</div></div>
+  <div class="s-card imp-card"><div class="n">${imp}</div><div class="l">Verbeterkans</div></div>
+  <div class="s-card crit-card"><div class="n">${crit}</div><div class="l">Noodzakelijk</div></div>
+</div>
+<table>${rows}</table>
+</body></html>`;
+
+  const blob = new Blob([html], { type: 'text/html' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `cro-audit-${client.replace(/\s+/g,'-').toLowerCase()}-${date}.html`;
+  a.click();
+  showToast('Rapport gedownload!');
+}
+
+function closeExport() { document.getElementById('export-panel').classList.remove('open'); }
+
+function copyExport() {
+  navigator.clipboard.writeText(document.getElementById('export-content').textContent);
+  showToast('Gekopieerd naar klembord!');
+}
+
+function downloadExport() {
+  const txt = document.getElementById('export-content').textContent;
+  const client = document.getElementById('f-client').value || 'audit';
+  const blob = new Blob([txt], { type: 'text/plain' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `cro-audit-${client.replace(/\s+/g,'-').toLowerCase()}.txt`;
+  a.click();
+  showToast('Bestand gedownload!');
+}
+
+let toastTimer;
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  document.getElementById('toast-msg').textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+// Close export panel on outside click
+document.getElementById('export-panel').addEventListener('click', function(e) {
+  if (e.target === this) closeExport();
+});
+
+buildUI();
+updateAll();
+</script>
+</body>
+</html>
